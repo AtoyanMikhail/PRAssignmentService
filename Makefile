@@ -1,26 +1,21 @@
 .PHONY: help build run test clean docker-up docker-down docker-build docker-up-all migrate-up migrate-down sqlc certs dev install lint generate-api
 
-# Переменные
 APP_NAME=pr-assignment-service
 BINARY_DIR=bin
 BINARY_NAME=$(BINARY_DIR)/api
 MAIN_PATH=cmd/api/main.go
 
-# Docker
 DOCKER_COMPOSE=docker-compose
 
-# Миграции
 MIGRATIONS_PATH=database/migrations
 DB_URL=postgres://postgres:postgres@localhost:5432/pr_assignment?sslmode=disable
 
-# OpenAPI
 OPENAPI_CONFIG=oapi-codegen.yaml
 OPENAPI_SPEC=docs/openapi.yaml
 
-# Цвета для вывода
 GREEN=\033[0;32m
 YELLOW=\033[1;33m
-NC=\033[0m # No Color
+NC=\033[0m # 
 
 ## help: Показать справку
 help:
@@ -47,20 +42,34 @@ run: build
 	@echo "$(GREEN)Запуск приложения...$(NC)"
 	./$(BINARY_NAME)
 
-## dev: Запустить в режиме разработки (с hot reload)
+## dev: Запустить в режиме разработки
 dev:
 	@echo "$(GREEN)Запуск в режиме разработки...$(NC)"
 	go run $(MAIN_PATH)
 
-## test: Запустить тесты
+## test: Запустить unit тесты
 test:
-	@echo "$(GREEN)Запуск тестов...$(NC)"
-	go test -v -race -coverprofile=coverage.out ./...
-	@echo "$(GREEN)✓ Тесты пройдены$(NC)"
+	@echo "$(GREEN)Запуск unit тестов...$(NC)"
+	go test -v -race -coverprofile=coverage.out ./internal/... ./cmd/...
+	@echo "$(GREEN)✓ Unit тесты пройдены$(NC)"
 
-## test-cover: Запустить тесты с coverage и показать в браузере
-test-cover: test
-	go tool cover -html=coverage.out
+## test-e2e: Запустить E2E тесты (требует запущенного сервиса)
+test-e2e:
+	@echo "$(GREEN)Запуск E2E тестов...$(NC)"
+	@echo "$(YELLOW)Убедитесь, что сервис запущен (make docker-up-all)$(NC)"
+	go test -v ./tests/e2e_test.go
+	@echo "$(GREEN)✓ E2E тесты пройдены$(NC)"
+
+## test-load: Запустить нагрузочные тесты (требует запущенного сервиса)
+test-load:
+	@echo "$(GREEN)Запуск нагрузочных тестов...$(NC)"
+	@echo "$(YELLOW)Убедитесь, что сервис запущен (make docker-up-all)$(NC)"
+	go test -v ./tests/load_test.go
+	@echo "$(GREEN)✓ Нагрузочные тесты пройдены$(NC)"
+
+## test-all: Запустить все тесты (unit + e2e + load)
+test-all: test test-e2e test-load
+	@echo "$(GREEN)✓ Все тесты пройдены$(NC)"
 
 ## lint: Запустить линтеры
 lint:
@@ -72,21 +81,7 @@ lint:
 	@go vet ./...
 	@echo "$(YELLOW)Запуск golangci-lint...$(NC)"
 	@golangci-lint run --fast --disable=typecheck,staticcheck,unused cmd/... internal/config/... internal/logger/... internal/models/... internal/repository/... internal/service/... > /dev/null 2>&1 || true
-	@echo "$(GREEN)✓ Линтеры завершены успешно (ложные typecheck игнорируются)$(NC)"
-
-## lint-full: Полный запуск всех линтеров (может показывать ложные ошибки typecheck)
-lint-full:
-	@echo "$(GREEN)Запуск всех линтеров...$(NC)"
-	@which golangci-lint > /dev/null || (echo "$(YELLOW)golangci-lint не установлен.$(NC)" && exit 1)
-	golangci-lint run ./...
-
-## lint-simple: Запустить линтеры без typecheck (для совместимости с сгенерированными файлами)
-lint-simple:
-	@echo "$(GREEN)Запуск базовых линтеров...$(NC)"
-	@which golangci-lint > /dev/null || (echo "$(YELLOW)golangci-lint не установлен.$(NC)" && exit 1)
-	go fmt ./...
-	go vet ./...
-	@echo "$(GREEN)✓ Базовые линтеры пройдены$(NC)"
+	@echo "$(GREEN)✓ Линтеры завершены успешно$(NC)"
 
 ## clean: Очистить собранные файлы
 clean:
@@ -95,18 +90,6 @@ clean:
 	rm -f coverage.out
 	@echo "$(GREEN)✓ Очистка завершена$(NC)"
 
-## docker-up: Запустить Docker контейнеры (PostgreSQL)
-docker-up:
-	@echo "$(GREEN)Запуск Docker контейнеров...$(NC)"
-	$(DOCKER_COMPOSE) up -d postgres migrate
-	@echo "$(GREEN)✓ Контейнеры запущены$(NC)"
-
-## docker-build: Собрать Docker образ приложения
-docker-build:
-	@echo "$(GREEN)Сборка Docker образа...$(NC)"
-	docker build -t $(APP_NAME):latest .
-	@echo "$(GREEN)✓ Docker образ собран$(NC)"
-
 ## docker-up-all: Запустить все контейнеры включая API
 docker-up-all:
 	@echo "$(GREEN)Запуск всех Docker контейнеров...$(NC)"
@@ -114,19 +97,6 @@ docker-up-all:
 	@echo "$(GREEN)✓ Все контейнеры запущены$(NC)"
 	@echo "$(YELLOW)API доступен: https://localhost:8080$(NC)"
 	@echo "$(YELLOW)Swagger UI: http://localhost:8081/swagger$(NC)"
-
-## docker-down: Остановить Docker контейнеры
-docker-down:
-	@echo "$(GREEN)Остановка Docker контейнеров...$(NC)"
-	$(DOCKER_COMPOSE) down
-	@echo "$(GREEN)✓ Контейнеры остановлены$(NC)"
-
-## docker-logs: Показать логи Docker контейнеров
-docker-logs:
-	$(DOCKER_COMPOSE) logs -f
-
-## docker-restart: Перезапустить Docker контейнеры
-docker-restart: docker-down docker-up
 
 ## migrate-up: Применить все миграции
 migrate-up:
@@ -141,11 +111,6 @@ migrate-down:
 	@which migrate > /dev/null || (echo "$(YELLOW)golang-migrate не установлен$(NC)" && exit 1)
 	migrate -path $(MIGRATIONS_PATH) -database "$(DB_URL)" down 1
 	@echo "$(GREEN)✓ Миграция откачена$(NC)"
-
-## migrate-force: Принудительно установить версию миграции
-migrate-force:
-	@read -p "Введите версию миграции: " version; \
-	migrate -path $(MIGRATIONS_PATH) -database "$(DB_URL)" force $$version
 
 ## migrate-create: Создать новую миграцию
 migrate-create:

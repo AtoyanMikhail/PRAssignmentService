@@ -46,7 +46,6 @@ func (h *Handler) PostPullRequestCreate(c *gin.Context) {
 		return
 	}
 
-	// Создаем PR
 	pr, err := h.services.PullRequest.CreatePR(c.Request.Context(), req.PullRequestId, req.PullRequestName, req.AuthorId)
 	if err != nil {
 		switch err {
@@ -84,14 +83,11 @@ func (h *Handler) PostPullRequestCreate(c *gin.Context) {
 		return
 	}
 
-	// Автоматически назначаем ревьюеров (до 2)
 	reviewers, err := h.services.Reviewer.AutoAssignReviewers(c.Request.Context(), pr.PullRequestID, 2)
 	if err != nil && err != service.ErrNoActiveReviewers {
-		// Логируем ошибку, но не прерываем выполнение
 		c.Error(err)
 	}
 
-	// Формируем ответ
 	assignedReviewerIDs := make([]string, 0, len(reviewers))
 	for _, r := range reviewers {
 		assignedReviewerIDs = append(assignedReviewerIDs, r.UserID)
@@ -152,7 +148,6 @@ func (h *Handler) PostPullRequestMerge(c *gin.Context) {
 		return
 	}
 
-	// Получаем ревьюеров
 	reviewers, _ := h.services.Reviewer.GetPRReviewers(c.Request.Context(), pr.PullRequestID)
 	assignedReviewerIDs := make([]string, 0, len(reviewers))
 	for _, r := range reviewers {
@@ -254,7 +249,6 @@ func (h *Handler) PostTeamAdd(c *gin.Context) {
 		return
 	}
 
-	// Создаем/получаем команду
 	team, err := h.services.Team.GetTeam(c.Request.Context(), req.TeamName)
 	if err != nil {
 		if err == service.ErrTeamNotFound || err == sql.ErrNoRows {
@@ -285,7 +279,6 @@ func (h *Handler) PostTeamAdd(c *gin.Context) {
 		}
 	}
 
-	// Создаем/обновляем пользователей
 	for _, member := range req.Members {
 		_, err := h.services.User.GetUser(c.Request.Context(), member.UserId)
 		if err != nil {
@@ -303,12 +296,7 @@ func (h *Handler) PostTeamAdd(c *gin.Context) {
 					})
 					return
 				}
-				// После создания обновляем is_active если нужно
-				if !member.IsActive {
-					_, _ = h.services.User.DeactivateUser(c.Request.Context(), member.UserId)
-				}
 			} else {
-				// Другая ошибка
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: struct {
 						Code    ErrorResponseErrorCode `json:"code"`
@@ -321,8 +309,11 @@ func (h *Handler) PostTeamAdd(c *gin.Context) {
 				return
 			}
 		} else {
-			// Обновляем существующего пользователя
-			_, err = h.services.User.UpdateUser(c.Request.Context(), member.UserId, member.Username, team.ID, member.IsActive)
+			isActive := true
+			if member.IsActive != nil {
+				isActive = *member.IsActive
+			}
+			_, err = h.services.User.UpdateUser(c.Request.Context(), member.UserId, member.Username, team.ID, isActive)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: struct {
@@ -357,10 +348,8 @@ func (h *Handler) PostTeamDeactivate(c *gin.Context) {
 		return
 	}
 
-	// Засекаем время начала операции
 	start := time.Now()
 
-	// Получаем команду для проверки существования
 	team, err := h.services.Team.GetTeam(c.Request.Context(), req.TeamName)
 	if err != nil {
 		if err == service.ErrTeamNotFound || err == sql.ErrNoRows {
@@ -387,7 +376,6 @@ func (h *Handler) PostTeamDeactivate(c *gin.Context) {
 		return
 	}
 
-	// Выполняем массовую деактивацию с переназначением PR
 	deactivatedUsers, reassignedPRs, err := h.services.User.DeactivateTeamUsers(c.Request.Context(), team.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -402,7 +390,6 @@ func (h *Handler) PostTeamDeactivate(c *gin.Context) {
 		return
 	}
 
-	// Вычисляем время выполнения
 	duration := time.Since(start).Milliseconds()
 
 	c.JSON(http.StatusOK, gin.H{
@@ -440,7 +427,6 @@ func (h *Handler) GetTeamGet(c *gin.Context, params GetTeamGetParams) {
 		return
 	}
 
-	// Получаем пользователей команды
 	users, err := h.services.User.ListTeamUsers(c.Request.Context(), team.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -457,10 +443,11 @@ func (h *Handler) GetTeamGet(c *gin.Context, params GetTeamGetParams) {
 
 	members := make([]TeamMember, 0, len(users))
 	for _, user := range users {
+		isActive := user.IsActive
 		members = append(members, TeamMember{
 			UserId:   user.UserID,
 			Username: user.Username,
-			IsActive: user.IsActive,
+			IsActive: &isActive,
 		})
 	}
 
@@ -529,7 +516,6 @@ func (h *Handler) PostUsersSetIsActive(c *gin.Context) {
 		return
 	}
 
-	// Получаем пользователя
 	user, err := h.services.User.GetUser(c.Request.Context(), req.UserId)
 	if err != nil {
 		if err == service.ErrUserNotFound || err == sql.ErrNoRows {
@@ -556,7 +542,6 @@ func (h *Handler) PostUsersSetIsActive(c *gin.Context) {
 		return
 	}
 
-	// Обновляем пользователя
 	var updatedUser models.User
 	if req.IsActive {
 		updatedUser, err = h.services.User.ActivateUser(c.Request.Context(), user.UserID)
@@ -576,9 +561,7 @@ func (h *Handler) PostUsersSetIsActive(c *gin.Context) {
 		return
 	}
 
-	// Если деактивируем пользователя, удаляем его из PR
 	if !req.IsActive {
-		// Переназначаем PR от неактивного ревьюера
 		err = h.services.Reviewer.ReassignFromInactiveReviewers(c.Request.Context())
 		if err != nil {
 			c.Error(err)
@@ -588,7 +571,6 @@ func (h *Handler) PostUsersSetIsActive(c *gin.Context) {
 	response := User{
 		UserId:   updatedUser.UserID,
 		Username: updatedUser.Username,
-		TeamName: "", // Можно получить из team если нужно
 		IsActive: updatedUser.IsActive,
 	}
 

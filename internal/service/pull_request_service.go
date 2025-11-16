@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
-"errors"
-"github.com/jackc/pgx/v5"
+	"errors"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/models"
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/repository"
@@ -24,7 +24,6 @@ func NewPullRequestService(repo repository.PullRequestRepository) PullRequestSer
 
 // CreatePR создает новый Pull Request
 func (s *PullRequestServiceImpl) CreatePR(ctx context.Context, pullRequestID, pullRequestName, authorID string) (models.PullRequest, error) {
-	// Проверка существования PR
 	exists, err := s.repo.PRExists(ctx, pullRequestID)
 	if err != nil {
 		return models.PullRequest{}, err
@@ -33,7 +32,6 @@ func (s *PullRequestServiceImpl) CreatePR(ctx context.Context, pullRequestID, pu
 		return models.PullRequest{}, ErrPullRequestAlreadyExists
 	}
 
-	// Создание PR со статусом OPEN
 	pr, err := s.repo.CreatePR(ctx, pullRequestID, pullRequestName, authorID, models.PullRequestStatusOpen)
 	if err != nil {
 		return models.PullRequest{}, err
@@ -56,18 +54,15 @@ func (s *PullRequestServiceImpl) GetPR(ctx context.Context, pullRequestID string
 
 // UpdatePRStatus обновляет статус Pull Request
 func (s *PullRequestServiceImpl) UpdatePRStatus(ctx context.Context, pullRequestID string, status models.PullRequestStatus) (models.PullRequest, error) {
-	// Проверка существования PR
 	_, err := s.GetPR(ctx, pullRequestID)
 	if err != nil {
 		return models.PullRequest{}, err
 	}
 
-	// Валидация статуса
 	if !status.IsValid() {
 		return models.PullRequest{}, ErrInvalidStatus
 	}
 
-	// Обновление статуса
 	pr, err := s.repo.UpdateStatus(ctx, pullRequestID, status)
 	if err != nil {
 		return models.PullRequest{}, err
@@ -78,7 +73,6 @@ func (s *PullRequestServiceImpl) UpdatePRStatus(ctx context.Context, pullRequest
 
 // MergePR помечает Pull Request как merged
 func (s *PullRequestServiceImpl) MergePR(ctx context.Context, pullRequestID string) (models.PullRequest, error) {
-	// Проверка существования PR
 	_, err := s.GetPR(ctx, pullRequestID)
 	if err != nil {
 		return models.PullRequest{}, err

@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
-"errors"
-"github.com/jackc/pgx/v5"
+	"errors"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/models"
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/repository"
@@ -24,7 +24,6 @@ func NewTeamService(repo repository.TeamRepository) TeamService {
 
 // CreateTeam создает новую команду
 func (s *TeamServiceImpl) CreateTeam(ctx context.Context, teamName string) (models.Team, error) {
-	// Проверка существования команды
 	exists, err := s.repo.Exists(ctx, teamName)
 	if err != nil {
 		return models.Team{}, err
@@ -33,7 +32,6 @@ func (s *TeamServiceImpl) CreateTeam(ctx context.Context, teamName string) (mode
 		return models.Team{}, ErrTeamAlreadyExists
 	}
 
-	// Создание команды
 	team, err := s.repo.Create(ctx, teamName)
 	if err != nil {
 		return models.Team{}, err

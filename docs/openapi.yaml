@@ -56,7 +56,7 @@ components:
           message: resource not found
     TeamMember:
       type: object
-      required: [ user_id, username, is_active ]
+      required: [ user_id, username ]
       properties:
         user_id:
           type: string
@@ -64,6 +64,7 @@ components:
           type: string
         is_active:
           type: boolean
+          default: true
     Team:
       type: object
       required: [ team_name, members]

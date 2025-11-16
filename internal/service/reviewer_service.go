@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"database/sql"
-"errors"
-"github.com/jackc/pgx/v5"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/models"
 	"github.com/AtoyanMikhail/PRAssignmentService/internal/repository"
@@ -39,7 +40,6 @@ func NewReviewerService(
 
 // AssignReviewer назначает ревьюера на Pull Request
 func (s *ReviewerServiceImpl) AssignReviewer(ctx context.Context, pullRequestID, userID string) (models.PRReviewer, error) {
-	// Проверка существования PR
 	pr, err := s.prRepo.GetPullRequestByPRID(ctx, pullRequestID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -48,12 +48,10 @@ func (s *ReviewerServiceImpl) AssignReviewer(ctx context.Context, pullRequestID,
 		return models.PRReviewer{}, err
 	}
 
-	// Проверка, что PR открыт
 	if pr.Status != models.PullRequestStatusOpen {
 		return models.PRReviewer{}, fmt.Errorf("cannot assign reviewer to non-open PR")
 	}
 
-	// Проверка существования пользователя
 	user, err := s.userRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -62,17 +60,14 @@ func (s *ReviewerServiceImpl) AssignReviewer(ctx context.Context, pullRequestID,
 		return models.PRReviewer{}, err
 	}
 
-	// Проверка, что пользователь активен
 	if !user.IsActive {
 		return models.PRReviewer{}, ErrUserInactive
 	}
 
-	// Проверка, что пользователь не является автором PR
 	if pr.AuthorID == userID {
 		return models.PRReviewer{}, ErrCannotAssignAuthor
 	}
 
-	// Проверка, что ревьюер еще не назначен
 	isAssigned, err := s.reviewerRepo.IsUserAssigned(ctx, pullRequestID, userID)
 	if err != nil {
 		return models.PRReviewer{}, err
@@ -124,7 +119,6 @@ func (s *ReviewerServiceImpl) AssignReviewers(ctx context.Context, pullRequestID
 
 // RemoveReviewer удаляет ревьюера с Pull Request
 func (s *ReviewerServiceImpl) RemoveReviewer(ctx context.Context, pullRequestID, userID string) error {
-	// Проверка существования PR
 	_, err := s.prRepo.GetPullRequestByPRID(ctx, pullRequestID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -133,7 +127,6 @@ func (s *ReviewerServiceImpl) RemoveReviewer(ctx context.Context, pullRequestID,
 		return err
 	}
 
-	// Проверка, что ревьюер назначен
 	isAssigned, err := s.reviewerRepo.IsUserAssigned(ctx, pullRequestID, userID)
 	if err != nil {
 		return err
@@ -150,7 +143,6 @@ func (s *ReviewerServiceImpl) RemoveReviewer(ctx context.Context, pullRequestID,
 func (s *ReviewerServiceImpl) ReplaceReviewer(ctx context.Context, pullRequestID, oldUserID, newUserID string) error {
 	// Выполнение в транзакции для атомарности
 	return s.store.ExecTx(ctx, func(txRepo *repository.PostgresRepository) error {
-		// Проверка существования PR
 		pr, err := txRepo.GetPullRequestByPRID(ctx, pullRequestID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -159,12 +151,10 @@ func (s *ReviewerServiceImpl) ReplaceReviewer(ctx context.Context, pullRequestID
 			return err
 		}
 
-		// Проверка, что PR открыт
 		if pr.Status != models.PullRequestStatusOpen {
 			return fmt.Errorf("cannot replace reviewer in non-open PR")
 		}
 
-		// Проверка, что старый ревьюер назначен
 		isAssigned, err := txRepo.IsUserAssigned(ctx, pullRequestID, oldUserID)
 		if err != nil {
 			return err
@@ -173,7 +163,62 @@ func (s *ReviewerServiceImpl) ReplaceReviewer(ctx context.Context, pullRequestID
 			return ErrReviewerNotAssigned
 		}
 
-		// Проверка существования нового пользователя
+		// Если новый пользователь не указан, выбираем автоматически
+		if newUserID == "" {
+			// Получаем старого пользователя для определения команды
+			oldUser, err := txRepo.GetByUserID(ctx, oldUserID)
+			if err != nil {
+				return err
+			}
+
+			// Получаем нагрузку пользователей
+			workloads, err := txRepo.GetUserWorkload(ctx)
+			if err != nil {
+				return err
+			}
+
+			workloadMap := make(map[string]int64)
+			for _, w := range workloads {
+				workloadMap[w.UserID] = w.OpenReviewsCount
+			}
+
+			// Получаем активных пользователей команды (исключая автора PR)
+			activeUsers, err := txRepo.ListActiveByTeamIDExcludingUser(ctx, oldUser.TeamID, pr.AuthorID)
+			if err != nil {
+				return err
+			}
+
+			// Исключаем текущих ревьюеров
+			currentReviewers, err := txRepo.GetReviewersByPRID(ctx, pullRequestID)
+			if err != nil {
+				return err
+			}
+
+			currentReviewerMap := make(map[string]bool)
+			for _, r := range currentReviewers {
+				currentReviewerMap[r.UserID] = true
+			}
+
+			// Фильтруем доступных кандидатов
+			var candidates []models.User
+			for _, user := range activeUsers {
+				if !currentReviewerMap[user.UserID] {
+					candidates = append(candidates, user)
+				}
+			}
+
+			if len(candidates) == 0 {
+				return ErrNoActiveReviewers
+			}
+
+			// Выбираем пользователя с минимальной нагрузкой
+			selectedUsers := selectUsersWithMinWorkload(candidates, workloadMap, 1)
+			if len(selectedUsers) == 0 {
+				return ErrNoActiveReviewers
+			}
+			newUserID = selectedUsers[0].UserID
+		}
+
 		newUser, err := txRepo.GetByUserID(ctx, newUserID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -182,17 +227,14 @@ func (s *ReviewerServiceImpl) ReplaceReviewer(ctx context.Context, pullRequestID
 			return err
 		}
 
-		// Проверка, что новый пользователь активен
 		if !newUser.IsActive {
 			return ErrUserInactive
 		}
 
-		// Проверка, что новый пользователь не является автором PR
 		if pr.AuthorID == newUserID {
 			return ErrCannotAssignAuthor
 		}
 
-		// Проверка, что новый ревьюер еще не назначен
 		isNewAssigned, err := txRepo.IsUserAssigned(ctx, pullRequestID, newUserID)
 		if err != nil {
 			return err
@@ -208,7 +250,6 @@ func (s *ReviewerServiceImpl) ReplaceReviewer(ctx context.Context, pullRequestID
 
 // GetPRReviewers возвращает список ревьюеров для Pull Request
 func (s *ReviewerServiceImpl) GetPRReviewers(ctx context.Context, pullRequestID string) ([]models.ReviewerInfo, error) {
-	// Проверка существования PR
 	_, err := s.prRepo.GetPullRequestByPRID(ctx, pullRequestID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -227,7 +268,6 @@ func (s *ReviewerServiceImpl) GetPRReviewers(ctx context.Context, pullRequestID 
 
 // GetUserPRs возвращает Pull Request'ы, где пользователь является ревьюером
 func (s *ReviewerServiceImpl) GetUserPRs(ctx context.Context, userID string) ([]models.PullRequestShort, error) {
-	// Проверка существования пользователя
 	_, err := s.userRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -246,7 +286,6 @@ func (s *ReviewerServiceImpl) GetUserPRs(ctx context.Context, userID string) ([]
 
 // AutoAssignReviewers автоматически назначает ревьюеров на Pull Request
 func (s *ReviewerServiceImpl) AutoAssignReviewers(ctx context.Context, pullRequestID string, count int) ([]models.PRReviewer, error) {
-	// Проверка существования PR
 	pr, err := s.prRepo.GetPullRequestByPRID(ctx, pullRequestID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -270,7 +309,6 @@ func (s *ReviewerServiceImpl) AutoAssignReviewers(ctx context.Context, pullReque
 		return nil, err
 	}
 
-	// Создание мапы нагрузки для быстрого доступа
 	workloadMap := make(map[string]int64)
 	for _, w := range workloads {
 		workloadMap[w.UserID] = w.OpenReviewsCount
@@ -371,7 +409,6 @@ func (s *ReviewerServiceImpl) ReassignFromInactiveReviewers(ctx context.Context)
 					if err := txRepo.Replace(ctx, prID, inactive.InactiveReviewerID, newReviewer.UserID); err != nil {
 						return fmt.Errorf("failed to replace reviewer: %w", err)
 					}
-					// Обновление нагрузки
 					workloadMap[newReviewer.UserID]++
 				} else {
 					// Если нет подходящих ревьюеров, просто удаляем неактивного

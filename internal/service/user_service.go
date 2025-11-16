@@ -36,7 +36,6 @@ func NewUserService(
 
 // CreateUser создает нового пользователя
 func (s *UserServiceImpl) CreateUser(ctx context.Context, userID, username string, teamID int64) (models.User, error) {
-	// Проверка существования пользователя
 	exists, err := s.userRepo.UserExists(ctx, userID)
 	if err != nil {
 		return models.User{}, err
@@ -45,7 +44,6 @@ func (s *UserServiceImpl) CreateUser(ctx context.Context, userID, username strin
 		return models.User{}, ErrUserAlreadyExists
 	}
 
-	// Проверка существования команды
 	_, err = s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -54,7 +52,6 @@ func (s *UserServiceImpl) CreateUser(ctx context.Context, userID, username strin
 		return models.User{}, err
 	}
 
-	// Создание пользователя (по умолчанию активен)
 	user, err := s.userRepo.CreateUser(ctx, userID, username, teamID, true)
 	if err != nil {
 		return models.User{}, err
@@ -89,13 +86,11 @@ func (s *UserServiceImpl) GetUserWithTeam(ctx context.Context, userID string) (m
 
 // UpdateUser обновляет данные пользователя
 func (s *UserServiceImpl) UpdateUser(ctx context.Context, userID, username string, teamID int64, isActive bool) (models.User, error) {
-	// Проверка существования пользователя
 	_, err := s.GetUser(ctx, userID)
 	if err != nil {
 		return models.User{}, err
 	}
 
-	// Проверка существования команды
 	_, err = s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -104,7 +99,6 @@ func (s *UserServiceImpl) UpdateUser(ctx context.Context, userID, username strin
 		return models.User{}, err
 	}
 
-	// Обновление пользователя
 	user, err := s.userRepo.Update(ctx, userID, username, teamID, isActive)
 	if err != nil {
 		return models.User{}, err
@@ -115,7 +109,6 @@ func (s *UserServiceImpl) UpdateUser(ctx context.Context, userID, username strin
 
 // DeactivateUser деактивирует пользователя
 func (s *UserServiceImpl) DeactivateUser(ctx context.Context, userID string) (models.User, error) {
-	// Проверка существования пользователя
 	_, err := s.GetUser(ctx, userID)
 	if err != nil {
 		return models.User{}, err
@@ -132,7 +125,6 @@ func (s *UserServiceImpl) DeactivateUser(ctx context.Context, userID string) (mo
 
 // ActivateUser активирует пользователя
 func (s *UserServiceImpl) ActivateUser(ctx context.Context, userID string) (models.User, error) {
-	// Проверка существования пользователя
 	_, err := s.GetUser(ctx, userID)
 	if err != nil {
 		return models.User{}, err
@@ -149,7 +141,6 @@ func (s *UserServiceImpl) ActivateUser(ctx context.Context, userID string) (mode
 
 // ListTeamUsers возвращает всех пользователей команды
 func (s *UserServiceImpl) ListTeamUsers(ctx context.Context, teamID int64) ([]models.User, error) {
-	// Проверка существования команды
 	_, err := s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -168,7 +159,6 @@ func (s *UserServiceImpl) ListTeamUsers(ctx context.Context, teamID int64) ([]mo
 
 // ListActiveTeamUsers возвращает активных пользователей команды
 func (s *UserServiceImpl) ListActiveTeamUsers(ctx context.Context, teamID int64) ([]models.User, error) {
-	// Проверка существования команды
 	_, err := s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
@@ -188,7 +178,6 @@ func (s *UserServiceImpl) ListActiveTeamUsers(ctx context.Context, teamID int64)
 // DeactivateTeamUsers деактивирует всех пользователей команды и перераспределяет их PR
 // Возвращает количество деактивированных пользователей и количество переназначенных PR
 func (s *UserServiceImpl) DeactivateTeamUsers(ctx context.Context, teamID int64) (int, int, error) {
-	// Проверка существования команды
 	_, err := s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {

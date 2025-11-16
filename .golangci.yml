@@ -53,32 +53,32 @@ linters-settings:
 
 linters:
   enable:
-    # Базовые линтеры без typecheck
-    - errcheck       # Проверка обработки ошибок
-    - gosimple       # Упрощение кода
-    - govet          # Стандартные проверки go vet
-    - ineffassign    # Обнаружение бесполезных присваиваний
+    # Базовые линтеры 
+    - errcheck      
+    - gosimple      
+    - govet          
+    - ineffassign    
     
-    # Стиль кода
-    - gofmt          # Форматирование
-    - goimports      # Импорты
-    - misspell       # Орфография
+    # Стиль
+    - gofmt          
+    - goimports      
+    - misspell       
     
     # Качество кода
-    - goconst        # Повторяющиеся строки -> константы
-    - unconvert      # Лишние преобразования типов
-    - nakedret       # Голые return в длинных функциях
+    - goconst       
+    - unconvert      
+    - nakedret       
     
     # Сложность
-    - cyclop         # Цикломатическая сложность
-    - funlen         # Длина функций
+    - cyclop         
+    - funlen         
     
     # Безопасность
-    - gosec          # Проверки безопасности
+    - gosec          
 
 issues:
   exclude-rules:
-    # Исключить некоторые линтеры для тестов
+    # Для тестов отключаем часть линтеров
     - path: _test\.go
       linters:
         - funlen
@@ -86,28 +86,7 @@ issues:
         - cyclop
         - gosec
         - errcheck
-    
-    # Исключить main.go от некоторых проверок
-    - path: cmd/api/main\.go
-      linters:
-        - funlen
-    
-    # Игнорировать стандартные ошибки context.Canceled
-    - text: "Error return value of.*is not checked"
-      linters:
-        - errcheck
-      source: "defer.*Close"
-    
-    # Игнорировать длинные строки в сгенерированных файлах
-    - path: internal/db/
-      linters:
-        - lll
-        - funlen
-        - goconst
-        - typecheck
-        - unused
-        - staticcheck
-  
+
   max-issues-per-linter: 0
   max-same-issues: 0
   
