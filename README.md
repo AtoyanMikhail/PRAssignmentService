@@ -27,7 +27,7 @@
 1. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/AtoyanMikhail/PRAssignmentService.git
-cd PRassignmentService
+cd PRAssignmentService
 ```
 
 2. Соберите проект:
