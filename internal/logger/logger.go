@@ -19,7 +19,7 @@ type Logger struct {
 }
 
 // Init инициализирует глобальный логгер
-func Init(writer io.Writer) {
+func Init(writer io.Writer, level string, format string) {
 	once.Do(func() {
 		encoderConfig := zapcore.EncoderConfig{
 			TimeKey:        "time",
@@ -35,10 +35,38 @@ func Init(writer io.Writer) {
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		}
 
+		// Парсим уровень логирования
+		var zapLevel zapcore.Level
+		switch level {
+		case "debug":
+			zapLevel = zapcore.DebugLevel
+		case "info":
+			zapLevel = zapcore.InfoLevel
+		case "warn", "warning":
+			zapLevel = zapcore.WarnLevel
+		case "error":
+			zapLevel = zapcore.ErrorLevel
+		case "fatal":
+			zapLevel = zapcore.FatalLevel
+		default:
+			zapLevel = zapcore.InfoLevel // по умолчанию info
+		}
+
+		// Выбираем энкодер в зависимости от формата
+		var encoder zapcore.Encoder
+		switch format {
+		case "json":
+			encoder = zapcore.NewJSONEncoder(encoderConfig)
+		case "console":
+			encoder = zapcore.NewConsoleEncoder(encoderConfig)
+		default:
+			encoder = zapcore.NewConsoleEncoder(encoderConfig) // по умолчанию console
+		}
+
 		core := zapcore.NewCore(
-			zapcore.NewConsoleEncoder(encoderConfig),
+			encoder,
 			zapcore.AddSync(writer),
-			zapcore.InfoLevel,
+			zapLevel,
 		)
 
 		instance = &Logger{

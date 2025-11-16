@@ -18,13 +18,16 @@ import (
 )
 
 func main() {
-	logger.Init(os.Stdout)
-	log := logger.Get()
-
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		// Используем простой вывод, так как логгер еще не инициализирован
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
+
+	logger.Init(os.Stdout, cfg.Logger.Level, cfg.Logger.Format)
+	log := logger.Get()
+
 	log.Info("Configuration loaded successfully")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
