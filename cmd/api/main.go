@@ -20,7 +20,6 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		// Используем простой вывод, так как логгер еще не инициализирован
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
