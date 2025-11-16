@@ -1,0 +1,122 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+  
+  gofmt:
+    simplify: true
+  
+  goimports:
+    local-prefixes: github.com/AtoyanMikhail/PRAssignmentService
+  
+  golint:
+    min-confidence: 0.8
+  
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  
+  misspell:
+    locale: US
+  
+  lll:
+    line-length: 140
+  
+  unused:
+    check-exported: false
+  
+  unparam:
+    check-exported: false
+  
+  nakedret:
+    max-func-lines: 30
+  
+  cyclop:
+    max-complexity: 15
+  
+  funlen:
+    lines: 100
+    statements: 50
+  
+  nestif:
+    min-complexity: 5
+
+linters:
+  enable:
+    # Базовые линтеры без typecheck
+    - errcheck       # Проверка обработки ошибок
+    - gosimple       # Упрощение кода
+    - govet          # Стандартные проверки go vet
+    - ineffassign    # Обнаружение бесполезных присваиваний
+    
+    # Стиль кода
+    - gofmt          # Форматирование
+    - goimports      # Импорты
+    - misspell       # Орфография
+    
+    # Качество кода
+    - goconst        # Повторяющиеся строки -> константы
+    - unconvert      # Лишние преобразования типов
+    - nakedret       # Голые return в длинных функциях
+    
+    # Сложность
+    - cyclop         # Цикломатическая сложность
+    - funlen         # Длина функций
+    
+    # Безопасность
+    - gosec          # Проверки безопасности
+
+issues:
+  exclude-rules:
+    # Исключить некоторые линтеры для тестов
+    - path: _test\.go
+      linters:
+        - funlen
+        - goconst
+        - cyclop
+        - gosec
+        - errcheck
+    
+    # Исключить main.go от некоторых проверок
+    - path: cmd/api/main\.go
+      linters:
+        - funlen
+    
+    # Игнорировать стандартные ошибки context.Canceled
+    - text: "Error return value of.*is not checked"
+      linters:
+        - errcheck
+      source: "defer.*Close"
+    
+    # Игнорировать длинные строки в сгенерированных файлах
+    - path: internal/db/
+      linters:
+        - lll
+        - funlen
+        - goconst
+        - typecheck
+        - unused
+        - staticcheck
+  
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  
+  # Исключить сгенерированные файлы
+  exclude-dirs:
+    - vendor
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
